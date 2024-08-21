@@ -38,49 +38,53 @@ const mapT = (f) => (timelineA) => {
 const unlinkT = timelineA =>
     timelineA._fns = [];
 
-const port = 8777;
+const port = 8777; console.log("hello from extension");
 
-console.log("hello from extension");
-let targetTabId = null;
+let targetTabIds = []; // 対象のタブIDを保持する配列
+let intervalId; // setIntervalのIDを保持する変数
+
+// HTTPサーバからcountを取得してTimelineを初期化
+function initializeCountTimeline() {
+    fetch('http://localhost:' + port.toString() + '/count')
+        .then(response => response.text())
+        .then(count => {
+            const countTimeline = Timeline(count);
+            console.log("initial count: " + count);
+
+            intervalId = setInterval(() => {
+                fetch('http://localhost:' + port.toString() + '/count')
+                    .then(response => response.text())
+                    .then(newCount => {
+                        if (countTimeline.lastVal !== newCount) {
+                            console.log("count changed: " + newCount);
+                            targetTabIds.forEach(tabId => chrome.tabs.reload(tabId)); // 全ての対象タブをリロード
+                            countTimeline.next(newCount);
+                        }
+                    })
+                    .catch(error => console.error('Error fetching count:', error));
+            }, 1000);
+        })
+        .catch(error => console.error('Error fetching initial count:', error));
+}
+
 chrome.tabs.onUpdated.addListener(function (tabId, changeInfo, tab) {
     if (changeInfo.status === 'complete' && tab.url && tab.url.startsWith('http://localhost:' + port.toString())) {
-        if (targetTabId === null) {  // 初めて開かれたタブの場合
-            targetTabId = tabId;
+        if (!targetTabIds.includes(tabId)) {  // まだ配列に含まれていないタブの場合
+            targetTabIds.push(tabId);
             console.log("target tab opened");
             chrome.tabs.update(tabId, { autoDiscardable: false });
 
-            let intervalId; // setIntervalのIDを保持する変数を宣言
-
-            fetch('http://localhost:' + port.toString() + '/count')
-                .then(response => response.text())
-                .then(count => {
-                    const countTimeline = Timeline(count);
-                    console.log("initial count: " + count);
-
-                    intervalId = setInterval(() => { // setIntervalのIDをintervalIdに代入
-                        fetch('http://localhost:' + port.toString() + '/count')
-                            .then(response => response.text())
-                            .then(newCount => {
-                                if (countTimeline.lastVal !== newCount) {
-                                    console.log("count changed: " + newCount)
-                                    chrome.tabs.reload(tabId);
-                                    countTimeline.next(newCount);
-                                }
-                            })
-                            .catch(error => console.error('Error fetching count:', error));
-                    }, 1000);
-                })
-                .catch(error => console.error('Error fetching initial count:', error));
-        } else if (targetTabId !== tabId) { // リロードされたタブの場合
-            // 何もしない
+            if (targetTabIds.length === 1) {  // 最初のタブが開かれたときに初期化
+                initializeCountTimeline();
+            }
         }
     }
+});
 
-    // タブが閉じられたときに targetTabId をリセット & intervalIdをクリア
-    chrome.tabs.onRemoved.addListener(function (closedTabId) {
-        if (closedTabId === targetTabId) {
-            targetTabId = null;
-            clearInterval(intervalId);
-        }
-    });
+// タブが閉じられたときに targetTabId を配列から除去 & intervalIdをクリア
+chrome.tabs.onRemoved.addListener(function (closedTabId) {
+    targetTabIds = targetTabIds.filter(tabId => tabId !== closedTabId);
+    if (targetTabIds.length === 0) {  // 全ての対象タブが閉じられたらインターバルをクリア
+        clearInterval(intervalId);
+    }
 });
