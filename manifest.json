@@ -1,0 +1,16 @@
+{
+    "manifest_version": 3,
+    "name": "Localhost Auto Reloader",
+    "version": "1.0",
+    "permissions": [
+        "tabs",
+        "webNavigation"
+    ],
+    "host_permissions": [
+        "http://localhost/*"
+    ],
+    "background": {
+        "service_worker": "background.js",
+        "type": "module"
+    }
+}
