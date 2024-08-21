@@ -47,6 +47,7 @@ chrome.tabs.onUpdated.addListener(function (tabId, changeInfo, tab) {
         if (targetTabId === null) {  // 初めて開かれたタブの場合
             targetTabId = tabId;
             console.log("target tab opened");
+            chrome.tabs.update(tabId, { autoDiscardable: false });
 
             let intervalId; // setIntervalのIDを保持する変数を宣言
 
